@@ -77,3 +77,35 @@ class ConversationService:
         if session_id in self.sessions:
             self.sessions[session_id] = []
             logger.info(f"Cleared conversation history for session {session_id}")
+    
+    def get_all_sessions(self) -> Dict[str, List[Dict[str, str]]]:
+        """
+        Get all conversation sessions (for admin panel).
+        
+        Returns:
+            Dictionary of all sessions with their messages
+        """
+        return self.sessions.copy()
+    
+    def get_all_conversations_anonymous(self) -> List[Dict]:
+        """
+        Get all conversations in anonymous format for export.
+        
+        Returns:
+            List of conversations with anonymized session IDs
+        """
+        conversations = []
+        for session_id, messages in self.sessions.items():
+            conversations.append({
+                "session_id_hash": str(hash(session_id))[:16],  # Anonymized session ID
+                "message_count": len(messages),
+                "messages": [
+                    {
+                        "role": msg.get("role", "unknown"),
+                        "content": msg.get("content", ""),
+                        "timestamp": msg.get("timestamp", "")
+                    }
+                    for msg in messages
+                ]
+            })
+        return conversations

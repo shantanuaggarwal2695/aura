@@ -19,21 +19,34 @@ Railway **does NOT use** a `.env` file from GitHub. You must set environment var
 
    Click "New Variable" for each of these:
 
-   ### Required Variables:
+   ### Required Variables (MUST SET):
    
    | Variable Name | Value | Description |
    |--------------|-------|-------------|
-   | `HUME_API_KEY` | `your_hume_api_key_here` | Your Hume.ai API key |
-   | `GOOGLE_ADK_API_KEY` | `your_google_api_key_here` | Your Google Gemini API key |
+   | `HUME_API_KEY` | `your_hume_api_key_here` | Your Hume.ai API key for voice transcription |
+   | `GOOGLE_ADK_API_KEY` | `your_google_api_key_here` | Your Google Gemini API key for AI responses |
    
-   ### Recommended Variables:
+   **Without these, the app will start but won't work properly!**
+   
+   ### Recommended Variables (Optional but Recommended):
    
    | Variable Name | Value | Description |
    |--------------|-------|-------------|
-   | `GOOGLE_ADK_MODEL_NAME` | `gemini-2.5-flash-lite` | Gemini model to use |
-   | `LLM_PROVIDER` | `gemini` | LLM provider (default: gemini) |
+   | `GOOGLE_ADK_MODEL_NAME` | `gemini-2.5-flash-lite` | Gemini model to use (default: gemini-2.5-flash-lite) |
+   | `GOOGLE_ADK_SYSTEM_INSTRUCTION` | `You are a helpful...` | System prompt for AI behavior |
    | `DEBUG` | `False` | Debug mode (use False in production) |
-   | `LOG_LEVEL` | `INFO` | Logging level |
+   | `LOG_LEVEL` | `INFO` | Logging level (INFO or DEBUG) |
+   
+   ### Optional Variables (Advanced):
+   
+   | Variable Name | Value | Description |
+   |--------------|-------|-------------|
+   | `LLM_PROVIDER` | `gemini` | LLM provider (default: gemini, can be openai_compatible or huggingface) |
+   | `HUME_API_URL` | `https://api.hume.ai` | Hume.ai API URL (usually keep default) |
+   | `GOOGLE_ADK_API_URL` | `https://generativelanguage.googleapis.com/v1beta` | Google API URL (usually keep default) |
+   | `ALLOWED_ORIGINS` | `*` | CORS allowed origins (set to your domain in production) |
+   
+   **See `ENVIRONMENT_VARIABLES.md` for complete variable reference.**
 
 4. **Save and Redeploy**
    - After adding all variables, Railway will automatically redeploy

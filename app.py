@@ -6,8 +6,11 @@ Supports both voice and text input with Hume.ai STT and Google ADK AI responses.
 import os
 import logging
 import pathlib
+import hashlib
+import csv
+import io
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
@@ -331,6 +334,209 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     })
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_panel():
+    """Serve the admin panel page."""
+    try:
+        with open("static/admin.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(
+            content="<h1>Error: Admin panel not found. Please ensure static/admin.html exists.</h1>",
+            status_code=404
+        )
+
+
+def verify_admin_key(admin_key: Optional[str] = None) -> bool:
+    """
+    Verify admin access key.
+    
+    Args:
+        admin_key: Admin key from request
+        
+    Returns:
+        True if admin key is valid
+    """
+    expected_key = os.getenv("ADMIN_KEY", "")
+    if not expected_key:
+        # If no ADMIN_KEY is set, allow access (for development)
+        # In production, always set ADMIN_KEY
+        logger.warning("ADMIN_KEY not set - allowing admin access (NOT SECURE FOR PRODUCTION)")
+        return True
+    
+    if not admin_key:
+        return False
+    
+    # Simple comparison (in production, use secure comparison)
+    return admin_key == expected_key
+
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(admin_key: Optional[str] = None):
+    """
+    Get statistics about all conversations.
+    
+    Args:
+        admin_key: Admin authentication key (query parameter)
+        
+    Returns:
+        Statistics about conversations
+    """
+    if not verify_admin_key(admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin key")
+    
+    try:
+        all_sessions = app.state.conversation_service.get_all_sessions()
+        total_sessions = len(all_sessions)
+        total_messages = sum(len(messages) for messages in all_sessions.values())
+        
+        # Count messages by role
+        user_messages = 0
+        assistant_messages = 0
+        for messages in all_sessions.values():
+            for msg in messages:
+                role = msg.get("role", "")
+                if role == "user":
+                    user_messages += 1
+                elif role == "assistant":
+                    assistant_messages += 1
+        
+        return JSONResponse(content={
+            "total_sessions": total_sessions,
+            "total_messages": total_messages,
+            "user_messages": user_messages,
+            "assistant_messages": assistant_messages,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error getting admin stats: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting stats: {str(e)}")
+
+
+@app.get("/api/admin/conversations")
+async def get_all_conversations(admin_key: Optional[str] = None):
+    """
+    Get all conversations (anonymous format).
+    
+    Args:
+        admin_key: Admin authentication key (query parameter)
+        
+    Returns:
+        List of all conversations with anonymized session IDs
+    """
+    if not verify_admin_key(admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin key")
+    
+    try:
+        conversations = app.state.conversation_service.get_all_conversations_anonymous()
+        return JSONResponse(content={
+            "conversations": conversations,
+            "total_conversations": len(conversations),
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error getting conversations: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting conversations: {str(e)}")
+
+
+@app.get("/api/admin/download/csv")
+async def download_conversations_csv(admin_key: Optional[str] = None):
+    """
+    Download all conversations as CSV (anonymous format).
+    
+    Args:
+        admin_key: Admin authentication key (query parameter)
+        
+    Returns:
+        CSV file with all conversations
+    """
+    if not verify_admin_key(admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin key")
+    
+    try:
+        conversations = app.state.conversation_service.get_all_conversations_anonymous()
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(["Session ID (Anonymized)", "Message Number", "Role", "Content", "Timestamp"])
+        
+        # Write conversations
+        for conv in conversations:
+            session_id_hash = conv["session_id_hash"]
+            for idx, msg in enumerate(conv["messages"], 1):
+                writer.writerow([
+                    session_id_hash,
+                    idx,
+                    msg["role"],
+                    msg["content"],
+                    msg["timestamp"]
+                ])
+        
+        # Convert to bytes
+        csv_content = output.getvalue().encode('utf-8')
+        output.close()
+        
+        # Create filename with timestamp
+        filename = f"aura_conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        from fastapi.responses import Response
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating CSV: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating CSV: {str(e)}")
+
+
+@app.get("/api/admin/download/json")
+async def download_conversations_json(admin_key: Optional[str] = None):
+    """
+    Download all conversations as JSON (anonymous format).
+    
+    Args:
+        admin_key: Admin authentication key (query parameter)
+        
+    Returns:
+        JSON file with all conversations
+    """
+    if not verify_admin_key(admin_key):
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin key")
+    
+    try:
+        conversations = app.state.conversation_service.get_all_conversations_anonymous()
+        
+        json_data = {
+            "exported_at": datetime.now().isoformat(),
+            "total_conversations": len(conversations),
+            "conversations": conversations
+        }
+        
+        import json as json_lib
+        json_content = json_lib.dumps(json_data, indent=2, ensure_ascii=False).encode('utf-8')
+        
+        # Create filename with timestamp
+        filename = f"aura_conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        from fastapi.responses import Response
+        return Response(
+            content=json_content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating JSON: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating JSON: {str(e)}")
 
 
 if __name__ == "__main__":

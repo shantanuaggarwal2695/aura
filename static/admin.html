@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura - Admin Panel</title>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <div class="header-content">
+                <h1>🔐 Aura Admin Panel</h1>
+                <p>Conversation Analytics & Export</p>
+            </div>
+            <div class="auth-section">
+                <input 
+                    type="password" 
+                    id="admin-key-input" 
+                    placeholder="Enter Admin Key" 
+                    class="admin-key-input"
+                />
+                <button id="login-button" class="login-button">Login</button>
+            </div>
+        </header>
+
+        <div id="admin-content" class="admin-content hidden">
+            <!-- Stats Section -->
+            <section class="stats-section">
+                <h2>📊 Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">💬</div>
+                        <div class="stat-value" id="total-sessions">-</div>
+                        <div class="stat-label">Total Sessions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📝</div>
+                        <div class="stat-value" id="total-messages">-</div>
+                        <div class="stat-label">Total Messages</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">👤</div>
+                        <div class="stat-value" id="user-messages">-</div>
+                        <div class="stat-label">User Messages</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🤖</div>
+                        <div class="stat-value" id="assistant-messages">-</div>
+                        <div class="stat-label">AI Messages</div>
+                    </div>
+                </div>
+                <button id="refresh-stats" class="refresh-button">🔄 Refresh Stats</button>
+            </section>
+
+            <!-- Export Section -->
+            <section class="export-section">
+                <h2>📥 Download Conversations</h2>
+                <p class="export-description">
+                    Download all conversations in anonymous format. Session IDs are hashed for privacy.
+                </p>
+                <div class="export-buttons">
+                    <button id="download-csv" class="download-button csv-button">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download CSV
+                    </button>
+                    <button id="download-json" class="download-button json-button">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download JSON
+                    </button>
+                </div>
+            </section>
+
+            <!-- Conversations Preview -->
+            <section class="preview-section">
+                <h2>📋 Conversations Preview</h2>
+                <div class="preview-controls">
+                    <button id="load-conversations" class="load-button">Load Conversations</button>
+                    <span id="conversation-count" class="count-badge"></span>
+                </div>
+                <div id="conversations-list" class="conversations-list">
+                    <p class="empty-state">Click "Load Conversations" to view conversations</p>
+                </div>
+            </section>
+        </div>
+
+        <div id="error-message" class="error-message hidden"></div>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>
