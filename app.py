@@ -5,6 +5,7 @@ Supports both voice and text input with Hume.ai STT and Google ADK AI responses.
 
 import os
 import logging
+import pathlib
 from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -20,15 +21,25 @@ from integrations.hume_client import HumeClient
 from integrations.llm_client import LLMClient
 from services.conversation_service import ConversationService
 
-# Load environment variables
-load_dotenv()
-
-# Configure logging
+# Configure logging first (before loading .env so we can log about it)
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+env_loaded = load_dotenv()
+if env_loaded:
+    logger.info("✅ Successfully loaded .env file")
+    # Try to get the .env file path for logging
+    env_file = pathlib.Path(".env")
+    if env_file.exists():
+        logger.info(f"   .env file location: {env_file.absolute()}")
+else:
+    logger.warning("⚠️ No .env file found. Using system environment variables only.")
+    logger.warning("   Please create a .env file in the project root with your API keys.")
+    logger.warning(f"   Expected location: {pathlib.Path('.').absolute()}/.env")
 
 
 @asynccontextmanager
@@ -37,8 +48,21 @@ async def lifespan(app: FastAPI):
     # Initialize clients
     logger.info("Initializing application...")
     
-    # Validate API keys
+    # Helper function to mask API keys for logging
+    def mask_api_key(key: Optional[str], show_length: bool = True) -> str:
+        """Mask API key for safe logging."""
+        if not key or key in ["your_hume_api_key_here", "your_google_adk_api_key_here", "your_huggingface_token_here"]:
+            return "NOT_SET"
+        if len(key) <= 8:
+            return "***"  # Too short to mask safely
+        masked = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "***"
+        if show_length:
+            return f"{masked} (length: {len(key)})"
+        return masked
+    
+    # Validate and log API keys
     hume_api_key = os.getenv("HUME_API_KEY")
+    logger.info(f"Hume.ai API Key: {mask_api_key(hume_api_key)}")
     
     if not hume_api_key or hume_api_key == "your_hume_api_key_here":
         logger.warning("HUME_API_KEY not set or using placeholder. Voice transcription may not work.")
@@ -47,23 +71,60 @@ async def lifespan(app: FastAPI):
         api_key=hume_api_key or "",
         api_url=os.getenv("HUME_API_URL", "https://api.hume.ai")
     )
+    logger.info(f"Hume.ai API URL: {os.getenv('HUME_API_URL', 'https://api.hume.ai')}")
     
     # Initialize LLM client (supports Gemini, OpenAI-compatible, and Hugging Face)
     llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
     llm_api_key = os.getenv("LLM_API_KEY", "")
     llm_api_url = os.getenv("LLM_API_URL")
-    llm_model_name = os.getenv("LLM_MODEL_NAME", "gemini-pro")
+    # Default to gemini-2.5-flash-lite (latest efficient model)
+    llm_model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash-lite")
     llm_system_instruction = os.getenv("LLM_SYSTEM_INSTRUCTION")
+    
+    # Debug: Log what we found in environment
+    logger.debug(f"Environment check - LLM_API_KEY: {'SET' if llm_api_key else 'NOT_SET'}")
+    logger.debug(f"Environment check - GOOGLE_ADK_API_KEY: {'SET' if os.getenv('GOOGLE_ADK_API_KEY') else 'NOT_SET'}")
     
     # Backward compatibility: use old env vars if new ones not set
     if llm_provider == "gemini" and not llm_api_key:
-        llm_api_key = os.getenv("GOOGLE_ADK_API_KEY", "")
+        google_adk_key = os.getenv("GOOGLE_ADK_API_KEY", "")
+        logger.debug(f"Falling back to GOOGLE_ADK_API_KEY: {'SET' if google_adk_key else 'NOT_SET'}")
+        if google_adk_key:
+            llm_api_key = google_adk_key
         if not llm_api_url:
             llm_api_url = os.getenv("GOOGLE_ADK_API_URL", "https://generativelanguage.googleapis.com/v1beta")
-        if llm_model_name == "gemini-pro":
-            llm_model_name = os.getenv("GOOGLE_ADK_MODEL_NAME", "gemini-pro")
+        # Use GOOGLE_ADK_MODEL_NAME if set, otherwise keep default
+        google_model = os.getenv("GOOGLE_ADK_MODEL_NAME")
+        if google_model:
+            llm_model_name = google_model
+        elif llm_model_name == "gemini-pro":
+            # Default to gemini-2.5-flash-lite as gemini-pro is deprecated
+            llm_model_name = "gemini-2.5-flash-lite"
         if not llm_system_instruction:
             llm_system_instruction = os.getenv("GOOGLE_ADK_SYSTEM_INSTRUCTION")
+    
+    # Log LLM configuration
+    logger.info(f"LLM Provider: {llm_provider}")
+    logger.info(f"LLM API Key: {mask_api_key(llm_api_key)}")
+    logger.info(f"LLM API URL: {llm_api_url or 'default'}")
+    logger.info(f"LLM Model: {llm_model_name}")
+    logger.info(f"LLM System Instruction: {'SET' if llm_system_instruction else 'NOT_SET'}")
+    
+    # Additional validation logging
+    if llm_provider == "gemini":
+        if not llm_api_key or llm_api_key in ["your_google_adk_api_key_here", "your_hume_api_key_here"]:
+            logger.warning("⚠️ Gemini API key is missing or using placeholder value!")
+            logger.warning("   Please check your .env file and ensure GOOGLE_ADK_API_KEY is set correctly.")
+            logger.warning("   Make sure the .env file is in the project root directory.")
+        else:
+            logger.info("✅ Gemini API key is configured")
+        
+        # Warn if using deprecated or potentially unavailable models
+        deprecated_models = ["gemini-pro", "gemini-1.5-flash"]
+        if llm_model_name in deprecated_models:
+            logger.warning(f"⚠️ Model '{llm_model_name}' may not be available in v1beta API.")
+            logger.warning(f"   Consider updating to 'gemini-2.5-flash-lite' in your .env file:")
+            logger.warning(f"   GOOGLE_ADK_MODEL_NAME=gemini-2.5-flash-lite")
     
     if llm_provider == "gemini" and (not llm_api_key or llm_api_key == "your_google_adk_api_key_here"):
         logger.warning("LLM_API_KEY (or GOOGLE_ADK_API_KEY) not set. AI responses may not work.")
@@ -96,9 +157,11 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend communication
+# In production, update allow_origins to only include your domain
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_origins=allowed_origins if "*" not in allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -272,9 +335,11 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    debug = os.getenv("DEBUG", "False").lower() == "true"
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
-        port=8000,
-        reload=os.getenv("DEBUG", "False").lower() == "true"
+        port=port,
+        reload=debug
     )

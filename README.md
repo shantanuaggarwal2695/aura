@@ -19,7 +19,8 @@ A Python web application that provides a conversational interface using both voi
 aura/
 ├── app.py                      # Main FastAPI application
 ├── requirements.txt            # Python dependencies
-├── .env.example                # Environment variables template
+├── environment.yml             # Conda environment file
+├── config.example.env           # Environment variables template
 ├── README.md                   # This file
 ├── integrations/
 │   ├── __init__.py
@@ -36,11 +37,64 @@ aura/
 
 ## Setup Instructions
 
-### 1. Install Dependencies
+### 1. Set Up Python Environment
 
+Choose one of the following methods:
+
+#### Option A: Using Conda (Recommended)
+
+**Quick Setup (using environment.yml):**
 ```bash
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate aura
 ```
+
+**Manual Setup:**
+1. **Create a new conda environment:**
+   ```bash
+   conda create -n aura python=3.11
+   conda activate aura
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   Or install via conda if packages are available:
+   ```bash
+   conda install -c conda-forge fastapi uvicorn httpx python-dotenv
+   pip install -r requirements.txt  # Install remaining packages via pip
+   ```
+
+3. **Deactivate environment when done:**
+   ```bash
+   conda deactivate
+   ```
+
+**Note:** To remove the conda environment later:
+```bash
+conda deactivate
+conda env remove -n aura
+```
+
+#### Option B: Using Python venv
+
+1. **Create a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Deactivate environment when done:**
+   ```bash
+   deactivate
+   ```
 
 ### 2. Configure Environment Variables
 
@@ -59,12 +113,24 @@ DEBUG=True
 LOG_LEVEL=INFO
 ```
 
-### 3. Get API Keys
+### 3. Activate Your Environment
+
+**If using Conda:**
+```bash
+conda activate aura
+```
+
+**If using venv:**
+```bash
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 4. Get API Keys
 
 - **Hume.ai**: Sign up at [https://www.hume.ai/](https://www.hume.ai/) and get your API key
 - **Google ADK**: Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey) or Google Cloud Console
 
-### 4. Run the Application
+### 5. Run the Application
 
 ```bash
 python app.py
@@ -76,7 +142,7 @@ Or using uvicorn directly:
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 5. Access the Webapp
+### 6. Access the Webapp
 
 Open your browser and navigate to:
 ```
@@ -193,6 +259,12 @@ Logs are configured in `app.py` and can be adjusted via the `LOG_LEVEL` environm
 - Verify your API keys are correct in `.env`
 - Check API rate limits and quotas
 - Review logs for detailed error messages
+
+### Conda Environment Issues
+- If conda command is not found, install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/products/distribution)
+- To update conda: `conda update conda`
+- To list all environments: `conda env list`
+- If environment creation fails, try: `conda clean --all` then recreate
 
 ### CORS Issues
 - Adjust CORS settings in `app.py` for production

@@ -26,7 +26,7 @@ class LLMClient:
         provider: str = "gemini",
         api_key: Optional[str] = None,
         api_url: Optional[str] = None,
-        model_name: str = "gemini-pro",
+        model_name: str = "gemini-2.5-flash-lite",
         system_instruction: Optional[str] = None,
         **kwargs
     ):
@@ -41,7 +41,7 @@ class LLMClient:
                 - OpenAI-compatible: http://localhost:11434/v1 (Ollama) or custom endpoint
                 - Hugging Face: https://api-inference.huggingface.co
             model_name: Name of the model to use
-                - Gemini: gemini-pro, gemini-1.5-pro, etc.
+                - Gemini: gemini-2.5-flash-lite (recommended), gemini-2.5-flash, gemini-1.5-pro, etc.
                 - OpenAI-compatible: llama3.2, mistral, etc. (depends on provider)
                 - Hugging Face: meta-llama/Llama-3.2-3B-Instruct, etc.
             system_instruction: System prompt/instruction for the AI agent
@@ -64,6 +64,16 @@ class LLMClient:
         
         # Provider-specific config
         self.kwargs = kwargs
+        
+        # Log configuration (mask API key)
+        def mask_key(key: Optional[str]) -> str:
+            if not key:
+                return "NOT_SET"
+            if len(key) <= 8:
+                return "***"
+            return f"{key[:4]}...{key[-4:]}"
+        
+        logger.info(f"LLMClient initialized - Provider: {self.provider}, Model: {self.model_name}, API Key: {mask_key(self.api_key)}, URL: {self.api_url}")
         
     async def get_response(
         self,
@@ -97,23 +107,49 @@ class LLMClient:
     ) -> str:
         """Get response from Google Gemini API."""
         try:
+            # Validate inputs
+            if not message or not message.strip():
+                raise ValueError("Message cannot be empty")
+            
+            if not self.api_key:
+                logger.error("Gemini API key is not configured")
+                raise ValueError("Gemini API key is not configured. Please set GOOGLE_ADK_API_KEY or LLM_API_KEY in your .env file")
+            
+            # Log API key status (masked)
+            def mask_key(key: str) -> str:
+                if len(key) <= 8:
+                    return "***"
+                return f"{key[:4]}...{key[-4:]}"
+            
+            logger.debug(f"Using Gemini API key: {mask_key(self.api_key)}")
+            
             conversation_history = conversation_history or []
             
             # Build messages array for Gemini API
             messages = []
             
             # Add conversation history
+            # Note: Gemini API uses "model" for assistant responses, not "assistant"
             for msg in conversation_history[-10:]:  # Limit to last 10 messages
-                messages.append({
-                    "role": msg.get("role", "user"),
-                    "parts": [{"text": msg.get("content", "")}]
-                })
+                role = msg.get("role", "user")
+                content = msg.get("content", "").strip()
+                if content:  # Only add non-empty messages
+                    # Convert "assistant" to "model" for Gemini API
+                    gemini_role = "model" if role == "assistant" else "user"
+                    messages.append({
+                        "role": gemini_role,
+                        "parts": [{"text": content}]
+                    })
             
             # Add current user message
             messages.append({
                 "role": "user",
-                "parts": [{"text": message}]
+                "parts": [{"text": message.strip()}]
             })
+            
+            # Validate we have at least one message
+            if not messages:
+                raise ValueError("No messages to send")
             
             # Prepare request payload
             payload = {
@@ -127,19 +163,29 @@ class LLMClient:
             }
             
             # Add system instruction if configured
-            if self.system_instruction:
+            if self.system_instruction and self.system_instruction.strip():
                 payload["systemInstruction"] = {
-                    "parts": [{"text": self.system_instruction}]
+                    "parts": [{"text": self.system_instruction.strip()}]
                 }
             
             # Build Gemini API URL
+            # Note: Gemini API expects model names like "gemini-pro" or "gemini-1.5-pro"
+            # Make sure model name is valid
             url = f"{self.api_url}/models/{self.model_name}:generateContent"
             if self.api_key:
                 url += f"?key={self.api_key}"
             
             async with httpx.AsyncClient(timeout=60.0) as client:
                 headers = {"Content-Type": "application/json"}
+                
+                # Log request for debugging (without sensitive data)
+                logger.debug(f"Gemini API request: URL={url.split('?')[0]}, model={self.model_name}, messages={len(messages)}")
+                
                 response = await client.post(url, json=payload, headers=headers)
+                
+                # Log response status
+                logger.debug(f"Gemini API response: status={response.status_code}")
+                
                 response.raise_for_status()
                 result = response.json()
                 
@@ -154,8 +200,36 @@ class LLMClient:
                 raise ValueError("Could not parse Gemini response")
                 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Gemini API error: {e.response.status_code} - {e.response.text}")
-            raise Exception(f"Gemini API error: {e.response.status_code}")
+            error_detail = "Unknown error"
+            try:
+                error_response = e.response.json()
+                if "error" in error_response:
+                    error_detail = error_response["error"].get("message", str(error_response["error"]))
+                else:
+                    error_detail = e.response.text
+            except:
+                error_detail = e.response.text
+            
+            logger.error(f"Gemini API error: {e.response.status_code} - {error_detail}")
+            logger.error(f"Attempted to use model: {self.model_name}")
+            
+            # Provide helpful suggestions for common errors
+            if e.response.status_code == 404 and "not found" in error_detail.lower():
+                suggestion = (
+                    f"\n❌ The model '{self.model_name}' is not available in API version v1beta.\n\n"
+                    f"✅ Try using one of these available models:\n"
+                    f"   - gemini-2.5-flash-lite (recommended - latest, fast, efficient)\n"
+                    f"   - gemini-2.5-flash\n"
+                    f"   - gemini-1.5-pro\n"
+                    f"   - gemini-1.5-pro-latest\n\n"
+                    f"📝 Update GOOGLE_ADK_MODEL_NAME in your .env file:\n"
+                    f"   GOOGLE_ADK_MODEL_NAME=gemini-2.5-flash-lite\n\n"
+                    f"Then restart your application."
+                )
+                error_detail += suggestion
+                logger.error(suggestion)
+            
+            raise Exception(f"Gemini API error ({e.response.status_code}): {error_detail}")
         except Exception as e:
             logger.error(f"Error getting Gemini response: {str(e)}", exc_info=True)
             raise

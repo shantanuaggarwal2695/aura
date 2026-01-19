@@ -28,8 +28,8 @@ class GoogleADKClient:
             system_instruction: System prompt/instruction for the AI agent
                 This defines the agent's behavior, personality, and capabilities
             model_name: Name of the Gemini model to use
-                Options: gemini-pro, gemini-1.5-pro, gemini-1.5-flash, 
-                        gemini-2.0-flash, gemini-pro-vision (multimodal)
+                Options: gemini-2.5-flash-lite (recommended), gemini-2.5-flash,
+                        gemini-1.5-pro, gemini-1.5-flash, gemini-pro-vision (multimodal)
         """
         self.api_key = api_key
         self.api_url = api_url.rstrip("/")

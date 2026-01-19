@@ -27,6 +27,16 @@ class HumeClient:
             "Content-Type": "application/json"
         }
         
+        # Log API key status (masked)
+        def mask_key(key: str) -> str:
+            if not key:
+                return "NOT_SET"
+            if len(key) <= 8:
+                return "***"
+            return f"{key[:4]}...{key[-4:]}"
+        
+        logger.info(f"HumeClient initialized - API Key: {mask_key(api_key)}, URL: {self.api_url}")
+        
     async def transcribe_audio(self, audio_data: bytes) -> str:
         """
         Transcribe audio to text using Hume.ai speech-to-text.

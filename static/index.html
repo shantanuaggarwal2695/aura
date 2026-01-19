@@ -3,50 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversational AI - Voice & Text Chat</title>
+    <title>Aura - Your AI Companion</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🤖 Conversational AI Assistant</h1>
-            <p>Chat with voice or text using Hume.ai and Google ADK</p>
+    <div class="app-container">
+        <!-- Header with Aura Branding -->
+        <header class="app-header">
+            <div class="brand-container">
+                <div class="angel-icon">
+                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Head -->
+                        <circle cx="50" cy="25" r="12" fill="url(#angelGradient)"/>
+                        <!-- Body -->
+                        <path d="M 35 35 L 50 65 L 65 35 Z" fill="url(#angelGradient)"/>
+                        <!-- Left Wing -->
+                        <path d="M 25 40 Q 15 30, 10 35 Q 15 40, 20 45 Q 25 42, 30 40" fill="url(#angelGradient)"/>
+                        <path d="M 20 45 Q 15 50, 12 55 Q 18 52, 25 48 Q 28 46, 30 45" fill="url(#angelGradient)"/>
+                        <!-- Right Wing -->
+                        <path d="M 75 40 Q 85 30, 90 35 Q 85 40, 80 45 Q 75 42, 70 40" fill="url(#angelGradient)"/>
+                        <path d="M 80 45 Q 85 50, 88 55 Q 82 52, 75 48 Q 72 46, 70 45" fill="url(#angelGradient)"/>
+                        <!-- Gradient Definition -->
+                        <defs>
+                            <linearGradient id="angelGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#E0F6FF;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1 class="app-title">Aura</h1>
+                    <p class="app-subtitle">Your AI companion</p>
+                </div>
+            </div>
         </header>
 
-        <div class="chat-container">
-            <div id="chat-messages" class="chat-messages">
-                <div class="message system-message">
-                    <p>Welcome! You can type a message or use the voice button to speak.</p>
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Chat Messages Area -->
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message system-message">
+                        <div class="message-icon">✨</div>
+                        <p>Welcome to Aura! I'm here to help. You can speak to me or type your message.</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="input-container">
-                <div class="input-wrapper">
-                    <textarea 
-                        id="text-input" 
-                        placeholder="Type your message here..." 
-                        rows="2"
-                    ></textarea>
-                    <button id="send-button" class="send-button" title="Send message">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                    </button>
-                </div>
-                
-                <div class="voice-controls">
+            <!-- Input Section -->
+            <div class="input-section">
+                <!-- Voice Input Button -->
+                <div class="voice-input-container">
                     <button id="voice-button" class="voice-button" title="Start/Stop voice recording">
-                        <svg id="mic-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg id="mic-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                             <line x1="12" y1="19" x2="12" y2="23"></line>
                             <line x1="8" y1="23" x2="16" y2="23"></line>
                         </svg>
+                        <div class="mic-ripple"></div>
                     </button>
                     <div id="recording-status" class="recording-status hidden">
                         <span class="pulse-dot"></span>
-                        <span>Recording...</span>
+                        <span>Listening...</span>
+                    </div>
+                </div>
+
+                <!-- Text Input -->
+                <div class="text-input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="text-input" 
+                            placeholder="Type your message..." 
+                            rows="1"
+                        ></textarea>
+                        <button id="send-button" class="send-button" title="Send message">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>

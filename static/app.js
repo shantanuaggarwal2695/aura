@@ -9,8 +9,10 @@ class ChatApp {
         this.isRecording = false;
         this.mediaRecorder = null;
         this.audioChunks = [];
+        this.microphonePermissionGranted = false;
         this.initializeElements();
         this.initializeEventListeners();
+        this.requestMicrophonePermission();
     }
 
     initializeElements() {
@@ -37,6 +39,142 @@ class ChatApp {
 
         // Voice button click
         this.voiceButton.addEventListener('click', () => this.toggleVoiceRecording());
+    }
+
+    /**
+     * Check if browser supports microphone access.
+     */
+    checkMicrophoneSupport() {
+        // Check for modern API
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            return true;
+        }
+        
+        // Check for legacy API
+        if (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Request microphone permission on page load.
+     */
+    async requestMicrophonePermission() {
+        try {
+            // Check if getUserMedia is available (modern or legacy)
+            if (!this.checkMicrophoneSupport()) {
+                console.warn('getUserMedia is not supported in this browser');
+                const browserInfo = this.getBrowserInfo();
+                this.addMessage('system', `⚠️ Microphone access is not supported in ${browserInfo}. Please use Chrome, Firefox, Safari, or Edge. You can still use text input.`);
+                return;
+            }
+
+            // Check if we're on HTTPS or localhost (required for microphone access)
+            const isSecure = location.protocol === 'https:' || 
+                           location.hostname === 'localhost' || 
+                           location.hostname === '127.0.0.1' ||
+                           location.hostname === '[::1]';
+            
+            if (!isSecure) {
+                console.warn('Microphone access requires HTTPS or localhost');
+                this.addMessage('system', '⚠️ Microphone access requires HTTPS or localhost. You can still use text input.');
+                return;
+            }
+
+            // Show a brief message that we're requesting permission
+            const permissionMsg = this.addMessage('system', '🎤 Requesting microphone permission...');
+            
+            // Small delay to let user see the message
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Get the getUserMedia function (modern or legacy)
+            const getUserMedia = navigator.mediaDevices?.getUserMedia || 
+                               navigator.getUserMedia || 
+                               navigator.webkitGetUserMedia || 
+                               navigator.mozGetUserMedia || 
+                               navigator.msGetUserMedia;
+            
+            // Request microphone access
+            const stream = await new Promise((resolve, reject) => {
+                const constraints = { 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                };
+                
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    // Modern API
+                    navigator.mediaDevices.getUserMedia(constraints)
+                        .then(resolve)
+                        .catch(reject);
+                } else {
+                    // Legacy API (needs different call signature)
+                    getUserMedia.call(navigator, constraints, resolve, reject);
+                }
+            }).catch(err => {
+                // Handle specific permission errors
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    console.log('Microphone permission denied by user');
+                    return null;
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    console.log('No microphone found');
+                    return null;
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                    console.log('Microphone is in use');
+                    return null;
+                } else {
+                    console.error('Error requesting microphone:', err);
+                    return null;
+                }
+            });
+
+            // Remove the permission request message
+            if (permissionMsg && permissionMsg.parentNode) {
+                permissionMsg.remove();
+            }
+
+            if (stream) {
+                // Permission granted - stop the stream immediately
+                stream.getTracks().forEach(track => track.stop());
+                this.microphonePermissionGranted = true;
+                console.log('Microphone permission granted');
+                // Show success message briefly
+                const successMsg = this.addMessage('system', '✅ Microphone ready! You can now use voice input.');
+                setTimeout(() => {
+                    if (successMsg && successMsg.parentNode) {
+                        successMsg.style.opacity = '0';
+                        successMsg.style.transition = 'opacity 0.5s';
+                        setTimeout(() => successMsg.remove(), 500);
+                    }
+                }, 2000);
+            } else {
+                this.microphonePermissionGranted = false;
+                this.addMessage('system', '⚠️ Microphone permission not granted. You can still use text input, or click the microphone button to try again.');
+            }
+        } catch (error) {
+            console.error('Error requesting microphone permission:', error);
+            this.microphonePermissionGranted = false;
+            this.addMessage('system', '⚠️ Could not access microphone. You can still use text input.');
+        }
+    }
+
+    /**
+     * Get browser information for error messages.
+     */
+    getBrowserInfo() {
+        const userAgent = navigator.userAgent;
+        if (userAgent.indexOf('Chrome') > -1) return 'this version of Chrome';
+        if (userAgent.indexOf('Firefox') > -1) return 'this version of Firefox';
+        if (userAgent.indexOf('Safari') > -1) return 'this version of Safari';
+        if (userAgent.indexOf('Edge') > -1) return 'this version of Edge';
+        if (userAgent.indexOf('Opera') > -1) return 'this version of Opera';
+        return 'your browser';
     }
 
     /**
@@ -104,19 +242,50 @@ class ChatApp {
      */
     async startRecording() {
         try {
-            // Request microphone access
+            // Check if getUserMedia is available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('getUserMedia is not supported in this browser');
+            }
+
+            // Check if we're on HTTPS or localhost (required for microphone access)
+            const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if (!isSecure) {
+                throw new Error('HTTPS_REQUIRED');
+            }
+
+            // Request microphone access (even if we requested on load, we need a new stream for recording)
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     channelCount: 1,
                     sampleRate: 16000,
                     echoCancellation: true,
-                    noiseSuppression: true
+                    noiseSuppression: true,
+                    autoGainControl: true
                 } 
+            }).catch(err => {
+                // Handle specific permission errors
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    throw new Error('PERMISSION_DENIED');
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    throw new Error('NO_MICROPHONE');
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                    throw new Error('MICROPHONE_IN_USE');
+                } else {
+                    throw err;
+                }
             });
 
-            // Initialize MediaRecorder
+            // Initialize MediaRecorder with fallback mime types
+            let mimeType = 'audio/webm;codecs=opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'audio/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'audio/mp4';
+                }
+            }
+
             this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
+                mimeType: mimeType
             });
 
             this.audioChunks = [];
@@ -133,6 +302,12 @@ class ChatApp {
                 stream.getTracks().forEach(track => track.stop());
             };
 
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                this.stopRecording();
+                this.showError('Recording error occurred. Please try again.');
+            };
+
             // Start recording
             this.mediaRecorder.start();
             this.isRecording = true;
@@ -140,9 +315,26 @@ class ChatApp {
 
         } catch (error) {
             console.error('Error starting recording:', error);
-            this.showError('Failed to access microphone. Please check permissions.');
             this.isRecording = false;
             this.updateRecordingUI(false);
+            
+            // Provide specific error messages
+            let errorMessage = 'Failed to access microphone. ';
+            if (error.message === 'PERMISSION_DENIED') {
+                errorMessage += 'Please allow microphone access in your browser settings and try again.';
+            } else if (error.message === 'NO_MICROPHONE') {
+                errorMessage += 'No microphone found. Please connect a microphone and try again.';
+            } else if (error.message === 'MICROPHONE_IN_USE') {
+                errorMessage += 'Microphone is being used by another application. Please close it and try again.';
+            } else if (error.message === 'HTTPS_REQUIRED') {
+                errorMessage += 'Microphone access requires HTTPS. Please use https:// or localhost.';
+            } else if (error.message.includes('getUserMedia is not supported')) {
+                errorMessage += 'Your browser does not support microphone access. Please use a modern browser.';
+            } else {
+                errorMessage += 'Please check your browser permissions and try again.';
+            }
+            
+            this.showError(errorMessage);
         }
     }
 
@@ -264,6 +456,8 @@ class ChatApp {
 
         this.chatMessages.appendChild(messageDiv);
         this.scrollToBottom();
+        
+        return messageDiv; // Return the element so it can be removed later if needed
     }
 
     /**
