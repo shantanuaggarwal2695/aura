@@ -98,6 +98,8 @@ conda env remove -n aura
 
 ### 2. Configure Environment Variables
 
+**For Local Development:**
+
 Copy `config.example.env` to `.env` and fill in your API keys:
 
 ```bash
@@ -109,9 +111,20 @@ Edit `.env` with your credentials:
 ```env
 HUME_API_KEY=your_hume_api_key_here
 GOOGLE_ADK_API_KEY=your_google_adk_api_key_here
+GOOGLE_ADK_MODEL_NAME=gemini-2.5-flash-lite
 DEBUG=True
 LOG_LEVEL=INFO
 ```
+
+**For Railway/Production Deployment:**
+
+⚠️ **Do NOT commit your `.env` file to GitHub!** 
+
+Instead, set environment variables in Railway dashboard:
+1. Go to your Railway project → Variables tab
+2. Add each variable individually (see `RAILWAY_SETUP.md` for details)
+3. Required: `HUME_API_KEY`, `GOOGLE_ADK_API_KEY`
+4. Optional: `GOOGLE_ADK_MODEL_NAME`, `LLM_PROVIDER`, `DEBUG`, `LOG_LEVEL`
 
 ### 3. Activate Your Environment
 

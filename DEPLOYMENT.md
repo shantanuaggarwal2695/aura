@@ -20,12 +20,22 @@ Railway provides automatic deployments from GitHub and SSL certificates.
    - Click "New Project" → "Deploy from GitHub repo"
    - Select your repository
    - **Important:** Railway will use Python 3.11 (specified in `runtime.txt` and `nixpacks.toml`)
-   - Add environment variables in Railway dashboard:
-     - `HUME_API_KEY`
-     - `GOOGLE_ADK_API_KEY` or `LLM_API_KEY`
-     - `GOOGLE_ADK_MODEL_NAME=gemini-2.5-flash-lite` (optional)
-     - `LLM_PROVIDER=gemini` (optional)
-     - `PORT=8000` (optional, Railway sets this automatically)
+   - **CRITICAL: Add environment variables in Railway dashboard:**
+     - Go to your project → Variables tab (or Settings → Variables)
+     - Click "New Variable" and add each of these:
+     
+     **Required Variables:**
+     - Variable: `HUME_API_KEY` → Value: `your_actual_hume_api_key`
+     - Variable: `GOOGLE_ADK_API_KEY` → Value: `your_actual_google_api_key`
+     
+     **Optional Variables (recommended):**
+     - Variable: `GOOGLE_ADK_MODEL_NAME` → Value: `gemini-2.5-flash-lite`
+     - Variable: `LLM_PROVIDER` → Value: `gemini`
+     - Variable: `DEBUG` → Value: `False`
+     - Variable: `LOG_LEVEL` → Value: `INFO`
+     
+     **Note:** Do NOT commit your .env file to GitHub! Railway uses environment variables set in the dashboard.
+   
    - Railway will detect Python 3.11 and deploy
    - Your app will be live at `https://your-app.railway.app`
 
