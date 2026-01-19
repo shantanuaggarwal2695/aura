@@ -6,7 +6,7 @@ Supports both voice and text input with Hume.ai STT and Google ADK AI responses.
 import os
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
@@ -29,9 +29,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-# In-memory conversation storage (can be replaced with a database)
-conversation_history: List[dict] = []
 
 
 @asynccontextmanager
@@ -128,14 +125,8 @@ async def chat(message: ChatMessage):
         # Get session ID or create new one
         session_id = message.session_id or app.state.conversation_service.create_session()
         
-        # Store user message in conversation history
-        user_msg = {
-            "role": "user",
-            "content": message.message,
-            "timestamp": datetime.now().isoformat(),
-            "session_id": session_id
-        }
-        conversation_history.append(user_msg)
+        # Store user message in conversation service
+        app.state.conversation_service.add_message(session_id, "user", message.message)
         
         # Get AI response from Google ADK
         ai_response = await app.state.google_adk_client.get_response(
@@ -143,17 +134,7 @@ async def chat(message: ChatMessage):
             conversation_history=app.state.conversation_service.get_session_history(session_id)
         )
         
-        # Store AI response in conversation history
-        ai_msg = {
-            "role": "assistant",
-            "content": ai_response,
-            "timestamp": datetime.now().isoformat(),
-            "session_id": session_id
-        }
-        conversation_history.append(ai_msg)
-        
-        # Update conversation service
-        app.state.conversation_service.add_message(session_id, "user", message.message)
+        # Store AI response in conversation service
         app.state.conversation_service.add_message(session_id, "assistant", ai_response)
         
         logger.info(f"Generated AI response: {ai_response[:50]}...")
