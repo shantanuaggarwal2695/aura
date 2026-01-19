@@ -12,16 +12,29 @@ logger = logging.getLogger(__name__)
 class GoogleADKClient:
     """Client for interacting with Google ADK (Agentic AI) API."""
     
-    def __init__(self, api_key: str, api_url: str = "https://generativelanguage.googleapis.com/v1beta"):
+    def __init__(
+        self, 
+        api_key: str, 
+        api_url: str = "https://generativelanguage.googleapis.com/v1beta",
+        system_instruction: Optional[str] = None,
+        model_name: str = "gemini-pro"
+    ):
         """
         Initialize Google ADK client.
         
         Args:
             api_key: Google ADK API key
             api_url: Base URL for Google ADK API
+            system_instruction: System prompt/instruction for the AI agent
+                This defines the agent's behavior, personality, and capabilities
+            model_name: Name of the Gemini model to use
+                Options: gemini-pro, gemini-1.5-pro, gemini-1.5-flash, 
+                        gemini-2.0-flash, gemini-pro-vision (multimodal)
         """
         self.api_key = api_key
         self.api_url = api_url.rstrip("/")
+        self.system_instruction = system_instruction
+        self.model_name = model_name
         
     async def get_response(
         self,
@@ -73,10 +86,14 @@ class GoogleADKClient:
                 }
             }
             
-            # Use Gemini API endpoint
-            # Adjust model name based on your Google ADK configuration
-            model_name = "gemini-pro"  # or "gemini-pro-vision" for multimodal
-            url = f"{self.api_url}/models/{model_name}:generateContent?key={self.api_key}"
+            # Add system instruction if configured
+            if self.system_instruction:
+                payload["systemInstruction"] = {
+                    "parts": [{"text": self.system_instruction}]
+                }
+            
+            # Use Gemini API endpoint with configured model
+            url = f"{self.api_url}/models/{self.model_name}:generateContent?key={self.api_key}"
             
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(

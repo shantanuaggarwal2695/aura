@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from integrations.hume_client import HumeClient
-from integrations.google_adk_client import GoogleADKClient
+from integrations.llm_client import LLMClient
 from services.conversation_service import ConversationService
 
 # Load environment variables
@@ -39,22 +39,47 @@ async def lifespan(app: FastAPI):
     
     # Validate API keys
     hume_api_key = os.getenv("HUME_API_KEY")
-    google_adk_api_key = os.getenv("GOOGLE_ADK_API_KEY")
     
     if not hume_api_key or hume_api_key == "your_hume_api_key_here":
         logger.warning("HUME_API_KEY not set or using placeholder. Voice transcription may not work.")
-    
-    if not google_adk_api_key or google_adk_api_key == "your_google_adk_api_key_here":
-        logger.warning("GOOGLE_ADK_API_KEY not set or using placeholder. AI responses may not work.")
     
     app.state.hume_client = HumeClient(
         api_key=hume_api_key or "",
         api_url=os.getenv("HUME_API_URL", "https://api.hume.ai")
     )
-    app.state.google_adk_client = GoogleADKClient(
-        api_key=google_adk_api_key or "",
-        api_url=os.getenv("GOOGLE_ADK_API_URL", "https://generativelanguage.googleapis.com/v1beta")
+    
+    # Initialize LLM client (supports Gemini, OpenAI-compatible, and Hugging Face)
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    llm_api_key = os.getenv("LLM_API_KEY", "")
+    llm_api_url = os.getenv("LLM_API_URL")
+    llm_model_name = os.getenv("LLM_MODEL_NAME", "gemini-pro")
+    llm_system_instruction = os.getenv("LLM_SYSTEM_INSTRUCTION")
+    
+    # Backward compatibility: use old env vars if new ones not set
+    if llm_provider == "gemini" and not llm_api_key:
+        llm_api_key = os.getenv("GOOGLE_ADK_API_KEY", "")
+        if not llm_api_url:
+            llm_api_url = os.getenv("GOOGLE_ADK_API_URL", "https://generativelanguage.googleapis.com/v1beta")
+        if llm_model_name == "gemini-pro":
+            llm_model_name = os.getenv("GOOGLE_ADK_MODEL_NAME", "gemini-pro")
+        if not llm_system_instruction:
+            llm_system_instruction = os.getenv("GOOGLE_ADK_SYSTEM_INSTRUCTION")
+    
+    if llm_provider == "gemini" and (not llm_api_key or llm_api_key == "your_google_adk_api_key_here"):
+        logger.warning("LLM_API_KEY (or GOOGLE_ADK_API_KEY) not set. AI responses may not work.")
+    elif llm_provider in ["openai_compatible", "huggingface"] and not llm_api_key:
+        logger.info(f"Using {llm_provider} provider without API key (may work for local models)")
+    
+    app.state.llm_client = LLMClient(
+        provider=llm_provider,
+        api_key=llm_api_key or None,
+        api_url=llm_api_url,
+        model_name=llm_model_name,
+        system_instruction=llm_system_instruction
     )
+    
+    # Backward compatibility alias
+    app.state.google_adk_client = app.state.llm_client
     app.state.conversation_service = ConversationService()
     logger.info("Application initialized successfully")
     yield
@@ -128,8 +153,8 @@ async def chat(message: ChatMessage):
         # Store user message in conversation service
         app.state.conversation_service.add_message(session_id, "user", message.message)
         
-        # Get AI response from Google ADK
-        ai_response = await app.state.google_adk_client.get_response(
+        # Get AI response from LLM (supports Gemini, OpenAI-compatible, Hugging Face)
+        ai_response = await app.state.llm_client.get_response(
             message=message.message,
             conversation_history=app.state.conversation_service.get_session_history(session_id)
         )
