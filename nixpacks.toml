@@ -11,4 +11,4 @@ cmds = [
 cmds = []
 
 [start]
-cmd = "sh start.sh"
+cmd = "python3.11 app.py"
