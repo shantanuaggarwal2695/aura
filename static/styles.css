@@ -205,6 +205,8 @@ body {
     flex-direction: column;
     gap: 20px;
     z-index: 5;
+    position: relative;
+    min-height: 200px; /* Ensure space for input on mobile */
 }
 
 /* Voice Input */
@@ -330,6 +332,7 @@ body {
 /* Text Input */
 .text-input-container {
     width: 100%;
+    min-height: 60px; /* Ensure minimum height on mobile */
 }
 
 .input-wrapper {
@@ -341,6 +344,9 @@ body {
     border-radius: 28px;
     padding: 10px 16px;
     transition: all 0.3s ease;
+    min-height: 50px; /* Ensure minimum height */
+    position: relative;
+    z-index: 1;
 }
 
 .input-wrapper:focus-within {
@@ -361,10 +367,30 @@ body {
     max-height: 120px;
     line-height: 1.5;
     padding: 4px 0;
+    min-height: 30px; /* Ensure minimum height */
+    width: 100%; /* Explicit width for iOS */
+    -webkit-appearance: none; /* Remove iOS default styling */
+    appearance: none;
+    display: block; /* Ensure it's displayed */
+    visibility: visible; /* Explicit visibility */
+    opacity: 1; /* Explicit opacity */
 }
 
 #text-input::placeholder {
     color: #B8E6FF;
+}
+
+/* iOS specific fixes */
+@supports (-webkit-touch-callout: none) {
+    #text-input {
+        font-size: 16px; /* Prevent zoom on iOS */
+        -webkit-text-size-adjust: 100%;
+    }
+    
+    .input-wrapper {
+        -webkit-appearance: none;
+        appearance: none;
+    }
 }
 
 .send-button {
@@ -523,6 +549,8 @@ body {
     .input-section {
         padding: 15px;
         gap: 15px;
+        min-height: 180px; /* More space on small screens */
+        padding-bottom: env(safe-area-inset-bottom, 15px); /* iOS safe area */
     }
 
     .voice-button {
@@ -533,6 +561,31 @@ body {
     .recording-status {
         font-size: 13px;
         padding: 8px 16px;
+    }
+    
+    .text-input-container {
+        min-height: 50px;
+    }
+    
+    .input-wrapper {
+        min-height: 44px; /* iOS minimum touch target */
+        padding: 8px 14px;
+    }
+    
+    #text-input {
+        font-size: 16px; /* Prevent iOS zoom */
+        min-height: 28px;
+    }
+}
+
+/* iPhone specific fixes */
+@media only screen and (max-width: 480px) and (-webkit-min-device-pixel-ratio: 2) {
+    .input-section {
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
+    }
+    
+    #text-input {
+        font-size: 16px !important; /* Prevent zoom on focus */
     }
 }
 

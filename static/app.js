@@ -270,9 +270,24 @@ class ChatApp {
     }
 
     /**
-     * Start voice recording.
+     * Start voice recording or speech recognition.
+     * Uses Web Speech API if available (better UX), otherwise falls back to audio recording.
      */
     async startRecording() {
+        // Check if Web Speech API is available (preferred method)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (SpeechRecognition) {
+            // Use Web Speech API directly (no need to record audio)
+            this.isRecording = true;
+            this.updateRecordingUI(true);
+            await this.transcribeWithWebSpeech();
+            this.isRecording = false;
+            this.updateRecordingUI(false);
+            return;
+        }
+
+        // Fallback to audio recording for backend transcription
         try {
             // Check if getUserMedia is available
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -329,7 +344,7 @@ class ChatApp {
             };
 
             this.mediaRecorder.onstop = () => {
-                this.processAudioRecording();
+                this.transcribeWithBackend();
                 // Stop all tracks to release microphone
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -382,7 +397,8 @@ class ChatApp {
     }
 
     /**
-     * Process recorded audio and send to backend for transcription.
+     * Process recorded audio using browser's Web Speech API for transcription.
+     * Falls back to backend transcription if Web Speech API is not available.
      */
     async processAudioRecording() {
         if (this.audioChunks.length === 0) {
@@ -390,6 +406,118 @@ class ChatApp {
             return;
         }
 
+        // Check if Web Speech API is available (preferred method)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (SpeechRecognition) {
+            // Use browser's Web Speech API (no backend needed)
+            await this.transcribeWithWebSpeech();
+        } else {
+            // Fallback to backend transcription
+            await this.transcribeWithBackend();
+        }
+    }
+
+    /**
+     * Transcribe using browser's Web Speech API (real-time, no backend needed).
+     */
+    async transcribeWithWebSpeech() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            this.showError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+            return;
+        }
+
+        // Show processing indicator
+        this.addMessage('system', '🎤 Listening... Speak now!');
+
+        return new Promise((resolve, reject) => {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            let hasResult = false;
+
+            recognition.onresult = (event) => {
+                if (event.results.length > 0 && event.results[0].length > 0) {
+                    const transcript = event.results[0][0].transcript;
+                    hasResult = true;
+                    
+                    // Remove processing message
+                    this.removeLastSystemMessage();
+                    
+                    // Display transcribed message as user input
+                    this.addMessage('user', transcript);
+                    
+                    // Send transcribed text to chat API
+                    this.sendTranscribedMessage(transcript)
+                        .then(() => resolve())
+                        .catch((error) => {
+                            console.error('Error sending transcribed message:', error);
+                            this.showError('Failed to send message. Please try again.');
+                            reject(error);
+                        });
+                } else {
+                    this.removeLastSystemMessage();
+                    this.showError('No speech detected. Please try again.');
+                    reject(new Error('No speech detected'));
+                }
+            };
+
+            recognition.onerror = (event) => {
+                this.removeLastSystemMessage();
+                let errorMessage = 'Speech recognition error. ';
+                
+                if (event.error === 'no-speech') {
+                    errorMessage = 'No speech detected. Please try again.';
+                } else if (event.error === 'audio-capture') {
+                    errorMessage = 'No microphone found. Please check your microphone connection.';
+                } else if (event.error === 'not-allowed') {
+                    errorMessage = 'Microphone permission denied. Please allow microphone access and try again.';
+                } else {
+                    errorMessage += `Error: ${event.error}`;
+                }
+                
+                this.showError(errorMessage);
+                reject(new Error(event.error));
+            };
+
+            recognition.onend = () => {
+                if (!hasResult) {
+                    // Only show error if we haven't already processed a result
+                    if (!hasResult) {
+                        this.removeLastSystemMessage();
+                        this.showError('Speech recognition ended. Please try again.');
+                    }
+                }
+            };
+
+            try {
+                recognition.start();
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    if (!hasResult && (recognition.state === 'listening' || recognition.state === 'running')) {
+                        recognition.stop();
+                        this.removeLastSystemMessage();
+                        this.showError('Speech recognition timeout. Please try again.');
+                        reject(new Error('Speech recognition timeout'));
+                    }
+                }, 10000);
+            } catch (error) {
+                this.removeLastSystemMessage();
+                this.showError(`Failed to start speech recognition: ${error.message}`);
+                reject(error);
+            }
+        });
+    }
+
+    /**
+     * Transcribe using backend API (fallback method).
+     */
+    async transcribeWithBackend() {
         // Show processing indicator
         this.addMessage('system', 'Processing voice input...');
 
@@ -440,7 +568,7 @@ class ChatApp {
                 errorMessage += 'Hume.ai does not support simple transcription. ';
             }
             
-            errorMessage += 'Please type your message instead, or configure a different transcription service (Google Speech-to-Text, OpenAI Whisper, etc.).';
+            errorMessage += 'Please type your message instead, or use a browser that supports Web Speech API (Chrome, Edge, Safari).';
             
             this.showError(errorMessage);
         }
