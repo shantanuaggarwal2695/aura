@@ -376,7 +376,9 @@ class ChatApp {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                const errorMsg = errorData.detail || `HTTP error! status: ${response.status}`;
+                throw new Error(errorMsg);
             }
 
             const data = await response.json();
@@ -393,25 +395,54 @@ class ChatApp {
             this.addMessage('user', transcription);
 
             // Send transcribed text to chat API
-            const chatResponse = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: transcription,
-                    session_id: this.sessionId
-                })
-            });
+            await this.sendTranscribedMessage(transcription);
 
-            if (!chatResponse.ok) {
-                throw new Error(`HTTP error! status: ${chatResponse.status}`);
-            }
-
-            const chatData = await chatResponse.json();
+        } catch (error) {
+            console.error('Error transcribing audio:', error);
+            this.removeLastSystemMessage();
             
-            // Store session ID
-            if (chatData.session_id) {
+            // Show user-friendly error message
+            let errorMessage = 'Voice transcription is currently unavailable. ';
+            
+            if (error.message.includes('Hume.ai') || error.message.includes('404')) {
+                errorMessage += 'Hume.ai does not support simple transcription. ';
+            }
+            
+            errorMessage += 'Please type your message instead, or configure a different transcription service (Google Speech-to-Text, OpenAI Whisper, etc.).';
+            
+            this.showError(errorMessage);
+        }
+    }
+
+    /**
+     * Send transcribed message to chat API.
+     */
+    async sendTranscribedMessage(transcription) {
+        const chatResponse = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: transcription,
+                session_id: this.sessionId
+            })
+        });
+
+        if (!chatResponse.ok) {
+            throw new Error(`HTTP error! status: ${chatResponse.status}`);
+        }
+
+        const chatData = await chatResponse.json();
+        
+        // Store session ID
+        if (chatData.session_id) {
+            this.sessionId = chatData.session_id;
+        }
+
+        // Display AI response
+        this.addMessage('assistant', chatData.response);
+    } (chatData.session_id) {
                 this.sessionId = chatData.session_id;
             }
 

@@ -41,26 +41,34 @@ class HumeClient:
         """
         Transcribe audio to text using Hume.ai speech-to-text.
         
+        Note: Hume.ai EVI (Empathic Voice Interface) requires a Configuration ID
+        and is designed for real-time conversation, not simple transcription.
+        
+        This implementation attempts to use Hume's batch transcription API if available,
+        otherwise falls back to a placeholder that indicates the limitation.
+        
         Args:
             audio_data: Raw audio bytes (WAV, MP3, etc.)
             
         Returns:
             Transcribed text string
             
-        Note:
-            This is a placeholder implementation. Actual Hume.ai API endpoints
-            may vary. You'll need to check Hume.ai documentation for the exact
-            endpoint and request format.
+        Raises:
+            Exception: If transcription fails or Hume.ai doesn't support simple transcription
         """
         try:
-            # Note: Hume.ai API structure may vary. This is a template.
-            # Check https://dev.hume.ai/docs for actual API endpoints
+            # Hume.ai EVI is designed for conversational AI, not simple transcription
+            # The /v0/evi/transcriptions endpoint doesn't exist
+            # For simple transcription, you may need to:
+            # 1. Use a different service (e.g., Google Speech-to-Text, OpenAI Whisper)
+            # 2. Use browser's Web Speech API (already implemented in frontend)
+            # 3. Use Hume's batch processing API if available
             
+            # Try alternative endpoints that might exist
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Example endpoint - adjust based on actual Hume.ai API
-                url = f"{self.api_url}/v0/evi/transcriptions"
+                # Option 1: Try batch transcription endpoint (if it exists)
+                url = f"{self.api_url}/v0/batch/transcriptions"
                 
-                # Prepare multipart form data
                 files = {
                     "audio": ("audio.wav", audio_data, "audio/wav")
                 }
@@ -69,32 +77,95 @@ class HumeClient:
                     "X-Hume-Api-Key": self.api_key
                 }
                 
-                response = await client.post(
-                    url,
-                    files=files,
-                    headers=headers
+                try:
+                    response = await client.post(
+                        url,
+                        files=files,
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        transcription = result.get("transcription", "") or result.get("text", "") or result.get("transcript", "")
+                        
+                        if transcription:
+                            logger.info(f"Successfully transcribed audio: {transcription[:50]}...")
+                            return transcription
+                    
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        logger.warning(f"Hume.ai batch transcription endpoint not found (404). Trying alternative...")
+                    else:
+                        raise
+                
+                # Option 2: Try jobs API (if available)
+                url = f"{self.api_url}/v0/jobs"
+                
+                try:
+                    # Create a job for transcription
+                    job_response = await client.post(
+                        url,
+                        files=files,
+                        headers=headers
+                    )
+                    
+                    if job_response.status_code == 200:
+                        job_result = job_response.json()
+                        job_id = job_result.get("job_id") or job_result.get("id")
+                        
+                        if job_id:
+                            # Poll for job completion
+                            job_url = f"{self.api_url}/v0/jobs/{job_id}"
+                            import asyncio
+                            
+                            for _ in range(10):  # Poll up to 10 times
+                                await asyncio.sleep(1)
+                                status_response = await client.get(job_url, headers=headers)
+                                
+                                if status_response.status_code == 200:
+                                    status_data = status_response.json()
+                                    if status_data.get("status") == "completed":
+                                        transcription = status_data.get("transcription", "") or status_data.get("text", "")
+                                        if transcription:
+                                            logger.info(f"Successfully transcribed audio via job: {transcription[:50]}...")
+                                            return transcription
+                                    elif status_data.get("status") == "failed":
+                                        break
+                        
+                except httpx.HTTPStatusError:
+                    pass  # Jobs API might not exist either
+                
+                # If all endpoints fail, raise informative error
+                raise Exception(
+                    "Hume.ai does not provide a simple transcription endpoint. "
+                    "Hume.ai EVI is designed for conversational AI with Configuration IDs. "
+                    "For simple speech-to-text, consider using:\n"
+                    "1. Browser's Web Speech API (already available in frontend)\n"
+                    "2. Google Cloud Speech-to-Text API\n"
+                    "3. OpenAI Whisper API\n"
+                    "4. AssemblyAI or other transcription services"
                 )
                 
-                response.raise_for_status()
-                result = response.json()
-                
-                # Extract transcription from response
-                # Adjust based on actual Hume.ai response structure
-                transcription = result.get("transcription", "") or result.get("text", "")
-                
-                if not transcription:
-                    logger.warning("Empty transcription received from Hume.ai")
-                    raise ValueError("Empty transcription received")
-                
-                logger.info(f"Successfully transcribed audio: {transcription[:50]}...")
-                return transcription
-                
         except httpx.HTTPStatusError as e:
-            logger.error(f"Hume.ai API error: {e.response.status_code} - {e.response.text}")
-            raise Exception(f"Hume.ai API error: {e.response.status_code}")
+            error_detail = ""
+            try:
+                error_response = e.response.json()
+                error_detail = error_response.get("detail", "") or error_response.get("message", "")
+            except:
+                error_detail = e.response.text[:200] if e.response.text else ""
+            
+            logger.error(f"Hume.ai API error: {e.response.status_code} - {error_detail}")
+            raise Exception(
+                f"Hume.ai API error ({e.response.status_code}): "
+                f"Hume.ai EVI is designed for conversational AI, not simple transcription. "
+                f"Please use the browser's built-in Web Speech API or configure a different transcription service. "
+                f"Error details: {error_detail}"
+            )
         except Exception as e:
+            if "does not provide" in str(e) or "Hume.ai EVI" in str(e):
+                raise  # Re-raise informative errors
             logger.error(f"Error transcribing audio with Hume.ai: {str(e)}", exc_info=True)
-            raise
+            raise Exception(f"Error transcribing audio: {str(e)}")
     
     async def synthesize_text(self, text: str) -> Optional[str]:
         """

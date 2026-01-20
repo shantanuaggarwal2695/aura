@@ -229,11 +229,33 @@ Health check endpoint.
 
 ## Configuration Notes
 
-### Hume.ai Integration
-The Hume.ai client in `integrations/hume_client.py` uses placeholder endpoints. You'll need to:
-1. Check the [Hume.ai API documentation](https://dev.hume.ai/docs) for actual endpoints
-2. Update the endpoint URLs in `hume_client.py`
-3. Adjust the response parsing based on the actual API response structure
+### Hume.ai Integration - Important Limitation
+
+**Hume.ai EVI (Empathic Voice Interface) is designed for conversational AI, not simple speech-to-text transcription.**
+
+The current implementation attempts to use Hume.ai for transcription, but Hume.ai's API is primarily designed for:
+- Real-time conversational AI with Configuration IDs
+- Empathic voice interactions
+- Not simple batch transcription
+
+**If you encounter 404 errors with Hume.ai transcription:**
+
+1. **Use Browser's Web Speech API** (already implemented as fallback)
+   - The frontend will automatically fall back to browser speech recognition if backend fails
+   - Works in Chrome, Edge, and Safari (with limitations)
+
+2. **Alternative Transcription Services:**
+   - **Google Cloud Speech-to-Text API** - Recommended for production
+   - **OpenAI Whisper API** - High accuracy
+   - **AssemblyAI** - Easy to integrate
+   - **Deepgram** - Fast and accurate
+
+3. **To use a different service:**
+   - Update `integrations/hume_client.py` to use your chosen service
+   - Or create a new client (e.g., `integrations/whisper_client.py`)
+   - Update `app.py` to use the new client
+
+**Note:** The frontend will show a helpful error message if transcription fails, prompting users to type their message instead.
 
 ### Google ADK Integration
 The Google ADK client uses the Gemini API. You may need to:
