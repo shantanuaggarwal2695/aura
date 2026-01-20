@@ -191,6 +191,10 @@ class ChatApp {
         // Display user message
         this.addMessage('user', message);
 
+        // Add placeholder for AI response
+        const assistantMessageElement = this.addMessage('assistant', '<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span>');
+        this.scrollToBottom();
+
         try {
             // Send to backend
             const response = await fetch('/api/chat', {
@@ -205,24 +209,52 @@ class ChatApp {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Try to get error details
+                let errorMessage = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorData.message || errorMessage;
+                } catch (e) {
+                    // If response is not JSON, use status text
+                    errorMessage = response.statusText || errorMessage;
+                }
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
             
+            // Validate response structure
+            if (!data || typeof data !== 'object') {
+                throw new Error('Invalid response format from server');
+            }
+
             // Store session ID
             if (data.session_id) {
                 this.sessionId = data.session_id;
             }
 
-            // Display AI response
-            this.addMessage('assistant', data.response);
+            // Check if response field exists
+            if (!data.response) {
+                console.error('Response data:', data);
+                throw new Error('No response field in server response');
+            }
+
+            // Update the message element with the actual response
+            assistantMessageElement.querySelector('p').textContent = data.response;
+            assistantMessageElement.querySelector('.timestamp').textContent = new Date().toLocaleTimeString();
             
         } catch (error) {
             console.error('Error sending message:', error);
-            this.showError('Failed to send message. Please try again.');
+            // Remove the placeholder message
+            if (assistantMessageElement && assistantMessageElement.parentNode) {
+                assistantMessageElement.remove();
+            }
+            // Show detailed error
+            const errorMsg = error.message || 'Failed to send message. Please try again.';
+            this.showError(`Error: ${errorMsg}`);
         } finally {
             this.sendButton.disabled = false;
+            this.textInput.focus();
         }
     }
 
@@ -442,18 +474,6 @@ class ChatApp {
 
         // Display AI response
         this.addMessage('assistant', chatData.response);
-    } (chatData.session_id) {
-                this.sessionId = chatData.session_id;
-            }
-
-            // Display AI response
-            this.addMessage('assistant', chatData.response);
-
-        } catch (error) {
-            console.error('Error processing audio:', error);
-            this.removeLastSystemMessage();
-            this.showError('Failed to process voice input. Please try again.');
-        }
     }
 
     /**
@@ -477,7 +497,12 @@ class ChatApp {
         messageDiv.className = `message ${role}-message`;
 
         const contentP = document.createElement('p');
-        contentP.textContent = content;
+        // Support HTML content for loading indicators
+        if (content.includes('<')) {
+            contentP.innerHTML = content;
+        } else {
+            contentP.textContent = content;
+        }
         messageDiv.appendChild(contentP);
 
         const timestamp = document.createElement('div');
